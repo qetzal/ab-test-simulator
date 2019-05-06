@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>A/B Test Simulator</title>
+</head>
+<body>
+
+<h1>A/B Test Simulator (see console logs)</h1>
+
+<span id="result"></span>
+
+<script type="text/javascript">
+var control_conversion = [1,5];	
+var test_conversion = [0.3,4];	
+var P_VALUE_TRESHHOLD = 0.05;
+
+// document.getElementById("result").innerHTML = document.getElementById("result").innerHTML + "1";
+// https://stackoverflow.com/questions/25582882/javascript-math-random-normal-distribution-gaussian-bell-curve
+function get_random_number_with_normal_distrubution(min, max, skew) {
+    var u = 0, v = 0;
+    while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+    while(v === 0) v = Math.random();
+    let num = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+
+    num = num / 10.0 + 0.5; // Translate to 0 -> 1
+    if (num > 1 || num < 0) num = get_random_number_with_normal_distrubution(min, max, skew); // resample between 0 and 1 if out of range
+    num = Math.pow(num, skew); // Skew
+    num *= max - min; // Stretch to fill range
+    num += min; // offset to min
+    return num;
+}
+
+function is_control() {
+	if (Math.random() <= 0.5) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+function is_conversion_for_visitor (min,max) {
+	var random_conversion_rate_for_this_visitor = get_random_number_with_normal_distrubution(min,max,1);
+	if (Math.random() <= random_conversion_rate_for_this_visitor/100 ) {
+		return true; // conversion happened
+	} else {
+		return false; //no conversion
+	}
+
+}
+
+function return_p_value (control_hits, control_conversions,test_hits,test_conversions) {
+	//https://codereview.stackexchange.com/questions/86242/calculate-ab-significance-with-control-and-treatment-objects
+	//https://vwo.com/ab-split-test-significance-calculator/
+
+	function cr(t) {
+	    return t.conversions / t.hits;
+	}
+	function calcZScore(c, t) {
+	    var z = cr(t) - cr(c);
+	    var s = (cr(t) * (1 - cr(t))) / t.hits + (cr(c) * (1 - cr(c))) / c.hits;
+	    return  z/Math.sqrt(s);
+	}
+	function cumNorDist(x) {
+	    var b1 = 0.319381530;
+	    var b2 = -0.356563782;
+	    var b3 = 1.781477937;
+	    var b4 = -1.821255978;
+	    var b5 = 1.330274429;
+	    var p = 0.2316419;
+	    var c = 0.39894228;
+
+	    if (x >= 0.0) {
+	        t = 1.0 / ( 1.0 + p * x );
+	        return (1.0 - c * Math.exp(-x * x / 2.0) * t *
+	        ( t * ( t * ( t * ( t * b5 + b4 ) + b3 ) + b2 ) + b1 ));
+	    } else {
+	        t = 1.0 / ( 1.0 - p * x );
+	        return ( c * Math.exp(-x * x / 2.0) * t *
+	        ( t * ( t * ( t * ( t * b5 + b4 ) + b3 ) + b2 ) + b1 ));
+	    }
+	}
+
+	var c = {};
+	c['hits'] = control_hits;
+	c['conversions'] = control_conversions;
+
+	var t = {};
+	t['hits'] = test_hits;
+	t['conversions'] = test_conversions;
+
+	return 1 - ( cumNorDist(calcZScore(c,t)) );
+ 
+}
+
+function if_stats_significant(control_hits, control_conversions,test_hits,test_conversions) {
+	if (
+		(return_p_value(control_hits, control_conversions,test_hits,test_conversions) <= P_VALUE_TRESHHOLD) 
+			||
+		(return_p_value(test_hits, test_conversions,control_hits,control_conversions) <= P_VALUE_TRESHHOLD)
+		) {
+		return true;
+	} else {
+		return false;
+	}
+
+}
+
+
+
+function run_one_simulation(check_at_hits) {
+	var control_segment_hits = 0;
+	var control_segment_conversion_hits = 0;
+	var test_segment_hits = 0;
+	var test_segment_conversion_hits = 0;
+
+	var current_hits = 0;
+
+	var result_limited_time = {};
+	var result_unlimited = {};
+	var result = {};
+
+
+	while (true) {
+		if ( is_control() ) {
+			control_segment_hits = control_segment_hits+ 1;
+			if (is_conversion_for_visitor(control_conversion[0], control_conversion[1])) {
+				control_segment_conversion_hits = control_segment_conversion_hits +1;
+			} 
+			
+		} else {
+			test_segment_hits = test_segment_hits + 1;
+			if (is_conversion_for_visitor(test_conversion[0], test_conversion[1])) {
+				test_segment_conversion_hits = test_segment_conversion_hits +1;
+			} 
+		}
+
+		current_hits = control_segment_hits+test_segment_hits;
+
+		if (Object.keys(result_unlimited).length == 0 && if_stats_significant(control_segment_hits, control_segment_conversion_hits,test_segment_hits,test_segment_conversion_hits)) {
+
+				result_unlimited['control_segment_hits'] = control_segment_hits;
+				result_unlimited['control_segment_conversion_hits'] = control_segment_conversion_hits;
+	
+				result_unlimited['test_segment_hits'] = test_segment_hits;
+				result_unlimited['test_segment_conversion_hits'] = test_segment_conversion_hits;
+
+				result_unlimited['control_segment_conversion_rate'] = (control_segment_conversion_hits / control_segment_hits).toFixed(3);
+				result_unlimited['test_segment_conversion_rate'] = (test_segment_conversion_hits / test_segment_hits).toFixed(3);
+
+				result_unlimited['is_result_significant'] = true;
+			
+
+				if (result_unlimited['control_segment_conversion_rate'] > result_unlimited['test_segment_conversion_rate']) {
+						result_unlimited['is_experiment_error'] = false;
+				} else {
+						result_unlimited['is_experiment_error'] = true;
+				}
+
+				if (current_hits<check_at_hits) {
+					result_unlimited['is_early'] = true;
+					result_unlimited['stopped_at_hits'] = current_hits;
+				} else {
+					result_unlimited['is_early'] = false;
+					result_unlimited['stopped_at_hits'] = current_hits;
+				}
+	
+		} // if result_unlimited empty & is significant current result 
+
+
+		if (current_hits == check_at_hits) {
+			result_limited_time['control_segment_hits'] = control_segment_hits;
+				result_limited_time['control_segment_conversion_hits'] = control_segment_conversion_hits;
+	
+				result_limited_time['test_segment_hits'] = test_segment_hits;
+				result_limited_time['test_segment_conversion_hits'] = test_segment_conversion_hits;
+
+				result_limited_time['control_segment_conversion_rate'] = (control_segment_conversion_hits / control_segment_hits).toFixed(3);
+				result_limited_time['test_segment_conversion_rate'] = (test_segment_conversion_hits / test_segment_hits).toFixed(3);
+
+				if (if_stats_significant(control_segment_hits, control_segment_conversion_hits,test_segment_hits,test_segment_conversion_hits)) {
+					result_limited_time['is_result_significant'] = true;
+				} else {
+					result_limited_time['is_result_significant'] = false;
+				}
+
+				if (result_limited_time['control_segment_conversion_rate'] > result_limited_time['test_segment_conversion_rate']) {
+						result_limited_time['is_experiment_error'] = false;
+			} else {
+						result_limited_time['is_experiment_error'] = true;
+			}
+
+
+		} // current hits = hits
+
+
+		if (current_hits>check_at_hits && Object.keys(result_unlimited).length > 0) break;
+
+	} // while
+
+	//log_results(i,control_segment_hits, control_segment_conversion_hits,test_segment_hits,test_segment_conversion_hits);
+
+	result['result_unlimited'] = result_unlimited;
+	result['result_limited_time'] = result_limited_time;
+	return result;
+}
+
+function run_many_simulations(number_of_simulations,check_at_hits) {
+
+	var overall_result = {};
+	overall_result['result_limited_time_significant_error'] = 0;
+	overall_result['result_limited_time_significant_noerror'] = 0;
+	overall_result['result_limited_time_notsignificant'] = 0;
+
+	overall_result['result_unlimited_time_significant_error'] = 0;
+	overall_result['result_unlimited_time_significant_noerror'] = 0;
+	overall_result['result_unlimited_time_significant_error_is_early'] = 0;
+	overall_result['result_unlimited_time_significant_error_is_late'] = 0;
+
+	overall_result['result_unlimited_time_significant_noerror_is_early'] = 0;
+	overall_result['result_unlimited_time_significant_noerror_is_late'] = 0;
+
+	var simulation_result = {};
+
+	for (var i = 0; i < number_of_simulations; i++) {
+		simulation_result = run_one_simulation(check_at_hits);
+		if (simulation_result['result_limited_time']['is_result_significant'] == true) {
+			if (simulation_result['result_limited_time']['is_experiment_error'] == true) {
+				overall_result['result_limited_time_significant_error'] = overall_result['result_limited_time_significant_error'] + 1;
+			} else {
+				overall_result['result_limited_time_significant_noerror'] = overall_result['result_limited_time_significant_noerror'] + 1;
+
+			}//simulation_result['result_limited_time']['is_experiment_error'] == true
+
+		} else {
+			overall_result['result_limited_time_notsignificant'] = overall_result['result_limited_time_notsignificant'] +1;
+		} // simulation_result['result_limited_time']['is_result_significant'] == true
+
+
+		if (simulation_result['result_unlimited']['is_result_significant'] == true) {
+			if (simulation_result['result_unlimited']['is_experiment_error'] == true) {
+				overall_result['result_unlimited_time_significant_error'] = overall_result['result_unlimited_time_significant_error'] + 1;
+
+				if (simulation_result['result_unlimited']['is_early'] == true) {
+				overall_result['result_unlimited_time_significant_error_is_early'] = overall_result['result_unlimited_time_significant_error_is_early'] + 1;
+				} else {
+					overall_result['result_unlimited_time_significant_error_is_late'] = overall_result['result_unlimited_time_significant_error_is_late'] + 1;
+				}
+
+
+			} else {
+				overall_result['result_unlimited_time_significant_noerror'] = overall_result['result_unlimited_time_significant_noerror'] + 1;
+
+				if (simulation_result['result_unlimited']['is_early'] == true) {
+				overall_result['result_unlimited_time_significant_noerror_is_early'] = overall_result['result_unlimited_time_significant_noerror_is_early'] + 1;
+				} else {
+					overall_result['result_unlimited_time_significant_noerror_is_late'] = overall_result['result_unlimited_time_significant_noerror_is_late'] + 1;
+				}
+			}			
+
+		} 
+		
+
+	} //end one simulation
+
+return overall_result;
+
+}
+
+console.log(run_many_simulations(10000,26000));
+// https://www.optimizely.com/sample-size-calculator/
+
+</script>
+
+</body>
+</html>
