@@ -194,6 +194,8 @@ function run_one_simulation(check_at_hits) {
 
 
 		if (current_hits>check_at_hits && Object.keys(result_unlimited).length > 0) break;
+		if (current_hits > 1000000) break;
+
 
 	} // while
 
