@@ -37,15 +37,17 @@ var test_conversion = [0.3,4];
 # Много симуляций
 Прогоняем каждую симуляцию много раз и собираем данные. 
 
-result_limited_time_notsignificant: 
-result_limited_time_significant_error: 
-result_limited_time_significant_noerror: 
-result_unlimited_time_significant_error: 
-result_unlimited_time_significant_error_is_early: 
-result_unlimited_time_significant_error_is_late: 
-result_unlimited_time_significant_noerror: 
-result_unlimited_time_significant_noerror_is_early: 
-result_unlimited_time_significant_noerror_is_late: 
+- result_limited_time_notsignificant: количество симуляций в которых после рекомендованного сегмента результат не статистическо значимый
+result_limited_time_significant_noerror:  количество симуляций в которых после рекомендованного сегмента результат был значимый и тест правильно показал отличие версий
+- result_limited_time_significant_error:количество симуляций в которых после рекомендованного сегмента результат был значимый и тест неправильно показал отличие версий (ошибся)
+
+- result_unlimited_time_significant_error: количество симуляций в которых тест завершился рано или поздно рекомендованного сегмента и ошибся
+- result_unlimited_time_significant_error_is_early: количество симуляций в которых наступил момент, что результат статистически значим, это случилось ДО рекомендованного сегменат и тест ошибся
+- result_unlimited_time_significant_error_is_late: количество симуляций в которых наступил момент, что результат статистически значим, это случилось ПОСЛЕ рекомендованного сегменат и тест ошибся
+
+- result_unlimited_time_significant_noerror: количество симуляций в которых тест завершился рано или поздно рекомендованного сегмента и показал правильный результат
+- result_unlimited_time_significant_noerror_is_early: количество симуляций в которых наступил момент, что результат статистически значим, это случилось ДО рекомендованного сегменат и тест не ошибся (мы получили правильные данные раньше)
+- result_unlimited_time_significant_noerror_is_late: количество симуляций в которых наступил момент, что результат статистически значим, это случилось ПОСЛЕ рекомендованного сегменат и тест не ошибся (мы получили правильные данные, но позже)
 
 # Попробовать самому
 Вот тут менять конверсии:
